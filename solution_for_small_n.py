@@ -48,3 +48,5 @@ def compute_Q(n, mod=None):
 print(compute_Q(2))
 print(compute_Q(3))
 print(compute_Q(6, 10**9 + 7))
+
+# Answer wrong need to work on this tomorrow
