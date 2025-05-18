@@ -1,52 +1,97 @@
-import itertools
-import math
+from functools import cache
 
-def rank_permutation(perm):
-    rank = 0
-    n = len(perm)
-    available = list(range(1, n + 1))
-    for i in range(n):
-        pos = available.index(perm[i])
-        rank += pos * math.factorial(n - 1 - i)
-        available.pop(pos)
-    return rank + 1
+MOD = 10**9 + 7
+N = 10**6
 
-def permutation_power(perm, power):
-    n = len(perm)
-    result = [0] * n
-    for i in range(n):
-        pos = i
-        for _ in range(power):
-            pos = perm[pos] - 1
-        result[i] = pos + 1
-    return tuple(result)
+primes = [1] * (N+1)
+mobius = [1] * (N+1)
 
-def compute_Q(n, mod=None):
-    permutations = list(itertools.permutations(range(1, n + 1)))
-    rank_map = {perm: rank_permutation(perm) for perm in permutations}
-    total = 0
-    for perm in permutations:
-        seen = {}
-        current = perm
-        cycle_length = 0
-        cycle_ranks = []
-        while current not in seen:
-            seen[current] = cycle_length
-            cycle_ranks.append(rank_map[current])
-            current = permutation_power(perm, len(seen))
-            cycle_length += 1
-        k = len(seen)
-        sum_ranks = sum(cycle_ranks)
-        contribution = (math.factorial(n) // k) * sum_ranks
-        if mod is not None:
-            contribution %= mod
-        total += contribution
-        if mod is not None:
-            total %= mod
-    return total
+for i in range(2, N+1):
+    if primes[i]:
+        for j in range(i**2, N+1, i):
+            primes[j] = 0
+        for j in range(i, N+1, i):
+            mobius[j] *= -1
+        for j in range(i**2, N+1, i**2):
+            mobius[j] = 0
 
-print(compute_Q(2))
-print(compute_Q(3))
-print(compute_Q(6, 10**9 + 7))
+invs = [None]
+for i in range(1, N+1):
+    invs.append(pow(i, -1, MOD))
 
-# Answer wrong need to work on this tomorrow
+H = [0] * (N+1) # sum of 1/i
+for i in range(1, N+1):
+    H[i] = (H[i-1] + invs[i]) % MOD
+
+# sum of 1/ab for a+b <= n
+@cache
+def sab(n, H=H, mod=MOD, invs=invs):
+    ret = 0
+    for a in range(1, n):
+        ret += invs[a] * H[n-a]
+        ret %= mod
+    return ret
+
+# sum of 1/ab for a+b <=n, gcd(a, b) == 1
+@cache
+def copab(n, mod=MOD, mobius=mobius, invs=invs):
+    ret = 0
+    for g in range(1, n+1):
+        ret += sab(n // g) * invs[g]**2 * mobius[g]
+        ret %= mod
+    return ret
+
+# sum of 1/lcm(a, b) for a, b <= n
+@cache
+def pab(n, mod=MOD, invs=invs):
+    ret = 0
+    for g in range(1, n+1):
+        ret += copab(n // g) * invs[g]
+        ret %= mod
+    return ret
+
+
+# x, y <-> y, x
+# 1, x <-> x, 0
+def samecycle(n, mod=MOD, invs=invs):
+    res = 0
+    for clen in range(2, n+1):
+        p = (clen-1) * pow(n*(n-1), -1, mod)
+        p10 = pow(clen*(clen-1), -1, mod) if not clen % 2 else 0
+        pp = p10 - invs[clen]
+        res += p * pp
+        res %= mod
+    return (invs[2] + res) * invs[2], (invs[2] - res) * invs[2]
+
+def diffcycle(n, mod=MOD, invs=invs, H=H):
+    res = n*(n-1) * invs[4]
+    v = pab(n) * invs[2]
+    return (res - v) * invs[n]*invs[n-1], (res + v + n*(1 - H[n])) * invs[n]*invs[n-1]
+
+def ends(n, mod=MOD):
+    same = samecycle(n)
+    diff = diffcycle(n)
+    start = (same[0] + diff[0])
+    start %= mod
+    end = (same[1] + diff[1])
+    end %= mod
+    return start, end
+
+def solve(n, mod=MOD):
+    start, end = ends(n)
+    diff = pow(n-2, -1, mod)*(end-start)
+    ret = 0
+    s = 0
+    fact = 1
+    for i in range(1, n):
+        s += start + (i-1)*diff
+        s %= mod
+        fact = fact * i % mod
+        ret += s * fact
+        ret %= mod
+    fact *= n
+    ret += 1
+    ret *= fact ** 2
+    return ret % mod
+
+print(solve(N))
